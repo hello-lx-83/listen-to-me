@@ -1,0 +1,22 @@
+pub mod cloud_asr;
+pub mod cloud_rewriter;
+pub mod local_asr;
+pub mod local_rewriter;
+mod qwen_client;
+
+pub async fn test_qwen_connection(api_key: String) -> Result<(), String> {
+    use serde_json::json;
+
+    let client = qwen_client::QwenClient::new(api_key)?;
+    client
+        .completion(json!({
+            "model": "qwen3.7-flash",
+            "messages": [{ "role": "user", "content": "只回复 OK" }],
+            "enable_thinking": false,
+            "stream": false,
+            "temperature": 0,
+            "max_tokens": 4
+        }))
+        .await
+        .map(|_| ())
+}

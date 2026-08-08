@@ -9,6 +9,7 @@ import type {
   DashboardOverview,
   HistoryRecord,
   QwenCredentialStatus,
+  QwenModelSettings,
 } from "@/shared/contracts";
 
 export const tauriClient = {
@@ -21,7 +22,14 @@ export const tauriClient = {
     invoke<QwenCredentialStatus>("save_qwen_api_key", { apiKey }),
   deleteQwenApiKey: () =>
     invoke<QwenCredentialStatus>("delete_qwen_api_key"),
-  testQwenConnection: () => invoke<void>("test_qwen_connection"),
+  getQwenModelSettings: () =>
+    invoke<QwenModelSettings>("get_qwen_model_settings"),
+  updateQwenModelSettings: (settings: QwenModelSettings) =>
+    invoke<QwenModelSettings>("update_qwen_model_settings", { settings }),
+  testQwenAsrModel: (model: QwenModelSettings["asrModel"]) =>
+    invoke<void>("test_qwen_asr_model", { model }),
+  testQwenRewriteModel: (model: QwenModelSettings["rewriteModel"]) =>
+    invoke<void>("test_qwen_rewrite_model", { model }),
   getAutostartEnabled: () => invoke<boolean>("get_autostart_enabled"),
   setAutostartEnabled: (enabled: boolean) =>
     invoke<boolean>("set_autostart_enabled", { enabled }),

@@ -17,6 +17,23 @@ export interface QwenCredentialStatus {
   configured: boolean;
 }
 
+export type QwenAsrModel =
+  | "qwen3-asr-flash"
+  | "fun-asr-flash-2026-06-15";
+export type QwenRewriteModel =
+  | "qwen3.7-flash"
+  | "qwen3.7-plus"
+  | "qwen3.7-max"
+  | "qwen3.6-flash"
+  | "qwen3.6-plus"
+  | "qwen3.5-flash"
+  | "qwen3.5-plus";
+
+export interface QwenModelSettings {
+  asrModel: QwenAsrModel;
+  rewriteModel: QwenRewriteModel;
+}
+
 export type RewriteMode = "raw" | "clean" | "article" | "structured";
 
 export interface AppSettings {

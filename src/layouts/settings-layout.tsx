@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -22,14 +22,17 @@ export function SettingsLayout() {
         <p className="mb-3 px-2 text-xs font-medium text-muted-foreground">设置</p>
         <nav className="flex flex-col gap-1">
           {items.map((item) => (
-            <Button
+            <NavLink
               key={item.to}
-              render={<NavLink to={item.to} />}
-              variant="ghost"
-              className={cn("justify-start", location.pathname === item.to && "bg-accent")}
+              to={item.to}
+              className={cn(
+                buttonVariants({ variant: "ghost" }),
+                "justify-start",
+                location.pathname === item.to && "bg-accent",
+              )}
             >
               {item.title}
-            </Button>
+            </NavLink>
           ))}
         </nav>
       </aside>

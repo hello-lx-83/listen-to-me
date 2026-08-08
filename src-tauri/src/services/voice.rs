@@ -5,7 +5,10 @@ use crate::{
         secrets::credential_store::{wipe_string, CredentialStore},
     },
     core::{
-        models::{DictionaryEntry, RecordedAudio, RewriteMode, RewrittenText, Transcript},
+        models::{
+            DictionaryEntry, QwenModelSettings, RecordedAudio, RewriteMode, RewrittenText,
+            Transcript,
+        },
         ports::{AudioCapture, SpeechRecognizer, TextRewriter},
     },
 };
@@ -37,26 +40,30 @@ impl VoiceService {
         &self,
         language: &str,
         dictionary: &[DictionaryEntry],
+        model_settings: &QwenModelSettings,
         cancellation: CancellationToken,
     ) -> Result<CloudVoiceModels, String> {
         let mut api_key = CredentialStore::qwen_api_key()?;
-        let recognizer =
-            CloudSpeechRecognizer::new_with_cancellation(api_key.clone(), cancellation.clone())
-                .map(|mut recognizer| {
-                    recognizer.configure(
-                        language,
-                        dictionary
-                            .iter()
-                            .map(|entry| entry.replacement.clone())
-                            .collect::<std::collections::BTreeSet<_>>()
-                            .into_iter()
-                            .collect(),
-                    );
-                    recognizer
-                });
+        let recognizer = CloudSpeechRecognizer::new_with_model_and_cancellation(
+            api_key.clone(),
+            model_settings.asr_model.clone(),
+            cancellation.clone(),
+        )
+        .map(|mut recognizer| {
+            recognizer.configure(
+                language,
+                dictionary
+                    .iter()
+                    .map(|entry| entry.replacement.clone())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .collect(),
+            );
+            recognizer
+        });
         let rewriter = CloudTextRewriter::new_with_cancellation(
             api_key.clone(),
-            "qwen3.7-flash",
+            model_settings.rewrite_model.clone(),
             cancellation,
         );
         wipe_string(&mut api_key);

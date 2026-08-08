@@ -271,9 +271,18 @@ fn finish_session(
         .spawn(move || {
             let result = tauri::async_runtime::block_on(async {
                 let settings = worker_app.state::<AppState>().store().settings()?;
+                let model_settings = worker_app
+                    .state::<AppState>()
+                    .store()
+                    .qwen_model_settings()?;
                 let dictionary = worker_app.state::<AppState>().store().list_dictionary()?;
                 let models =
-                    voice.cloud_models(&settings.language, &dictionary, worker_token.clone())?;
+                    voice.cloud_models(
+                        &settings.language,
+                        &dictionary,
+                        &model_settings,
+                        worker_token.clone(),
+                    )?;
                 let transcribing_started = Instant::now();
                 let transcript = models.transcribe(audio).await?;
                 emit_metric(

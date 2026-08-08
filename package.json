@@ -6,6 +6,10 @@
   "repository": "https://github.com/hello-lx-83/listen-to-me",
   "type": "module",
   "scripts": {
+    "version:sync": "node scripts/sync-version.mjs",
+    "precheck": "pnpm version:sync",
+    "prepackage:windows": "pnpm version:sync",
+    "pretauri": "pnpm version:sync",
     "dev": "vite",
     "build": "tsc && vite build",
     "check": "pnpm build && cargo test --manifest-path src-tauri/Cargo.toml",

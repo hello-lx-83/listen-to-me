@@ -1,128 +1,371 @@
 import { useEffect, useState, type FormEvent } from "react";
+import {
+  AlertCircleIcon,
+  CheckCircle2Icon,
+  KeyRoundIcon,
+  MicIcon,
+  WandSparklesIcon,
+} from "lucide-react";
 
 import { SettingRow, SettingsSection } from "@/components/app/settings-section";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { SettingsPage } from "@/pages/settings/settings-page";
 import { tauriClient } from "@/services/tauri-client";
+import type { QwenAsrModel, QwenModelSettings, QwenRewriteModel } from "@/shared/contracts";
+
+const DEFAULT_MODELS: QwenModelSettings = {
+  asrModel: "qwen3-asr-flash",
+  rewriteModel: "qwen3.7-flash",
+};
+
+const ASR_MODELS: Array<{ value: QwenAsrModel; label: string }> = [
+  { value: "qwen3-asr-flash", label: "Qwen3 ASR Flash · 推荐" },
+  { value: "fun-asr-flash-2026-06-15", label: "Fun-ASR Flash" },
+];
+
+const REWRITE_MODELS: Array<{
+  value: QwenRewriteModel;
+  label: string;
+}> = [
+  {
+    value: "qwen3.7-flash",
+    label: "Qwen3.7 Flash · 推荐",
+  },
+  {
+    value: "qwen3.7-plus",
+    label: "Qwen3.7 Plus",
+  },
+  {
+    value: "qwen3.7-max",
+    label: "Qwen3.7 Max",
+  },
+  {
+    value: "qwen3.6-flash",
+    label: "Qwen3.6 Flash",
+  },
+  {
+    value: "qwen3.6-plus",
+    label: "Qwen3.6 Plus",
+  },
+  {
+    value: "qwen3.5-flash",
+    label: "Qwen3.5 Flash",
+  },
+  {
+    value: "qwen3.5-plus",
+    label: "Qwen3.5 Plus",
+  },
+];
+
+type Capability = "asr" | "rewrite";
+type TestResult = { status: "success" | "error"; message: string };
+
+function testErrorMessage(error: unknown, capability: Capability) {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (detail.includes("authentication failed") || detail.includes("not configured")) {
+    return "API Key 无效，请重新配置。";
+  }
+  if (detail.includes("quota") || detail.includes("rate limit")) {
+    return "额度或请求频率受限。";
+  }
+  if (detail.includes("HTTP status 404") || detail.includes("unsupported")) {
+    return "模型不可用或尚未开通。";
+  }
+  if (detail.includes("network request failed")) {
+    return "无法连接千问服务。";
+  }
+  return capability === "asr" ? "语音识别测试失败。" : "文本整理测试失败。";
+}
 
 export function ModelsSettingsPage() {
   const [configured, setConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [pending, setPending] = useState(true);
-  const [error, setError] = useState("");
-  const [testResult, setTestResult] = useState<"" | "success" | "failed">("");
+  const [models, setModels] = useState<QwenModelSettings>(DEFAULT_MODELS);
+  const [loading, setLoading] = useState(true);
+  const [credentialPending, setCredentialPending] = useState(false);
+  const [modelSaving, setModelSaving] = useState(false);
+  const [testing, setTesting] = useState<Record<Capability, boolean>>({
+    asr: false,
+    rewrite: false,
+  });
+  const [pageError, setPageError] = useState("");
+  const [credentialError, setCredentialError] = useState("");
+  const [testResults, setTestResults] = useState<Partial<Record<Capability, TestResult>>>({});
 
   useEffect(() => {
-    void tauriClient
-      .getQwenCredentialStatus()
-      .then((status) => setConfigured(status.configured))
-      .catch(() => setError("无法读取 Windows 凭据状态。"))
-      .finally(() => setPending(false));
+    void Promise.all([
+      tauriClient.getQwenCredentialStatus(),
+      tauriClient.getQwenModelSettings(),
+    ])
+      .then(([status, savedModels]) => {
+        setConfigured(status.configured);
+        setModels(savedModels);
+      })
+      .catch(() => setPageError("无法读取千问模型配置。"))
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!apiKey.trim()) {
-      setError("请输入 API Key。 ");
+      setCredentialError("请输入 API Key。");
       return;
     }
 
-    setPending(true);
-    setError("");
+    setCredentialPending(true);
+    setPageError("");
+    setCredentialError("");
+    setTestResults({});
     try {
       const status = await tauriClient.saveQwenApiKey(apiKey);
       setConfigured(status.configured);
       setApiKey("");
     } catch {
-      setError("保存失败，请确认当前 Windows 会话可以使用凭据管理器。 ");
+      setCredentialError("保存失败，请确认当前 Windows 会话可以使用凭据管理器。");
     } finally {
-      setPending(false);
+      setCredentialPending(false);
     }
   }
 
   async function handleDelete() {
-    setPending(true);
-    setError("");
+    if (!window.confirm("确定移除千问 API Key 吗？移除后语音输入将暂时不可用。")) return;
+
+    setCredentialPending(true);
+    setPageError("");
+    setCredentialError("");
+    setTestResults({});
     try {
       const status = await tauriClient.deleteQwenApiKey();
       setConfigured(status.configured);
       setApiKey("");
     } catch {
-      setError("删除失败，请稍后重试。 ");
+      setPageError("移除失败，请稍后重试。");
     } finally {
-      setPending(false);
+      setCredentialPending(false);
     }
   }
 
-  async function handleTest() {
-    setPending(true);
-    setError("");
-    setTestResult("");
+  async function handleRewriteModelChange(value: QwenRewriteModel | null) {
+    if (!value || value === models.rewriteModel) return;
+
+    setModelSaving(true);
+    setPageError("");
+    setTestResults((current) => ({ ...current, rewrite: undefined }));
     try {
-      await tauriClient.testQwenConnection();
-      setTestResult("success");
+      const saved = await tauriClient.updateQwenModelSettings({
+        ...models,
+        rewriteModel: value,
+      });
+      setModels(saved);
     } catch {
-      setTestResult("failed");
-      setError("连接测试失败，请检查密钥、网络和账户额度。 ");
+      setPageError("文本整理模型保存失败。");
     } finally {
-      setPending(false);
+      setModelSaving(false);
     }
   }
+
+  async function handleAsrModelChange(value: QwenAsrModel | null) {
+    if (!value || value === models.asrModel) return;
+
+    setModelSaving(true);
+    setPageError("");
+    setTestResults((current) => ({ ...current, asr: undefined }));
+    try {
+      const saved = await tauriClient.updateQwenModelSettings({
+        ...models,
+        asrModel: value,
+      });
+      setModels(saved);
+    } catch {
+      setPageError("语音识别模型保存失败。");
+    } finally {
+      setModelSaving(false);
+    }
+  }
+
+  async function handleTest(capability: Capability) {
+    setTesting((current) => ({ ...current, [capability]: true }));
+    setPageError("");
+    setTestResults((current) => ({ ...current, [capability]: undefined }));
+    try {
+      if (capability === "asr") {
+        await tauriClient.testQwenAsrModel(models.asrModel);
+      } else {
+        await tauriClient.testQwenRewriteModel(models.rewriteModel);
+      }
+      setTestResults((current) => ({
+        ...current,
+        [capability]: {
+          status: "success",
+          message: capability === "asr" ? "语音识别可用。" : "文本整理可用。",
+        },
+      }));
+    } catch (error) {
+      setTestResults((current) => ({
+        ...current,
+        [capability]: { status: "error", message: testErrorMessage(error, capability) },
+      }));
+    } finally {
+      setTesting((current) => ({ ...current, [capability]: false }));
+    }
+  }
+
+  const controlsDisabled = loading || credentialPending || modelSaving;
 
   return (
-    <SettingsPage title="模型与网络" description="选择云端或本地处理线路。">
-      <SettingsSection title="模型线路" description="本地适配器将在云端链路稳定后实现。">
+    <SettingsPage title="模型与网络" description="千问模型与 API Key。">
+      {pageError ? (
+        <Alert variant="destructive">
+          <AlertCircleIcon />
+          <AlertTitle>配置未完成</AlertTitle>
+          <AlertDescription>{pageError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <SettingsSection
+        title="千问百炼"
+        description="API Key 保存在 Windows 凭据管理器。"
+      >
         <SettingRow
-          title="处理方式"
+          title="连接状态"
           control={
-            <Select defaultValue="cloud">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
+            <Badge variant={configured ? "default" : "secondary"}>
+              {configured ? <CheckCircle2Icon /> : <KeyRoundIcon />}
+              {configured ? "已配置" : "未配置"}
+            </Badge>
+          }
+        />
+        <form onSubmit={handleSave}>
+          <FieldGroup>
+            <Field data-invalid={Boolean(credentialError)}>
+              <FieldLabel htmlFor="qwen-api-key">API Key</FieldLabel>
+              <Input
+                id="qwen-api-key"
+                type="password"
+                value={apiKey}
+                onChange={(event) => {
+                  setApiKey(event.target.value);
+                  setCredentialError("");
+                }}
+                placeholder={configured ? "••••••••••••••••" : "输入百炼 API Key"}
+                autoComplete="off"
+                aria-invalid={Boolean(credentialError)}
+                disabled={credentialPending}
+              />
+              <FieldError>{credentialError}</FieldError>
+            </Field>
+            <Field orientation="horizontal">
+              <Button type="submit" disabled={credentialPending || !apiKey.trim()}>
+                {credentialPending ? <Spinner data-icon="inline-start" /> : null}
+                {credentialPending ? "处理中…" : configured ? "替换密钥" : "保存密钥"}
+              </Button>
+              {configured ? (
+                <Button type="button" variant="outline" disabled={credentialPending} onClick={handleDelete}>
+                  移除密钥
+                </Button>
+              ) : null}
+            </Field>
+          </FieldGroup>
+        </form>
+      </SettingsSection>
+
+      <SettingsSection
+        title="语音识别"
+        description="录音转文字。"
+      >
+        <SettingRow
+          title="识别模型"
+          control={
+            <Select
+              value={models.asrModel}
+              onValueChange={(value) => void handleAsrModelChange(value as QwenAsrModel | null)}
+              disabled={controlsDisabled}
+            >
+              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
                 <SelectGroup>
-                  <SelectItem value="cloud">云端</SelectItem>
-                  <SelectItem value="local" disabled>本地（稍后支持）</SelectItem>
+                  {ASR_MODELS.map((model) => (
+                    <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
           }
         />
         <SettingRow
-          title="云端状态"
-          description="当前接入千问语音识别与文本模型。"
-          control={<div className="flex items-center gap-2"><Badge variant={configured ? "default" : "secondary"}>{configured ? "已配置" : "未配置"}</Badge>{configured ? <Button size="sm" variant="outline" disabled={pending} onClick={handleTest}>{pending ? "检测中…" : "测试连接"}</Button> : null}</div>}
+          title="模型测试"
+          control={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!configured || controlsDisabled || testing.asr}
+              onClick={() => void handleTest("asr")}
+            >
+              {testing.asr ? <Spinner data-icon="inline-start" /> : <MicIcon data-icon="inline-start" />}
+              {testing.asr ? "测试中…" : "测试语音识别"}
+            </Button>
+          }
         />
-        {testResult === "success" ? <p className="text-sm text-muted-foreground">连接测试成功，文本模型可用。</p> : null}
+        <TestFeedback result={testResults.asr} />
       </SettingsSection>
 
-      <SettingsSection title="千问凭据" description="API Key 仅保存在当前 Windows 用户的凭据管理器中，界面不会读取或展示原值。">
-        <form onSubmit={handleSave}>
-          <FieldGroup>
-            <Field data-invalid={Boolean(error)}>
-              <FieldLabel htmlFor="qwen-api-key">API Key</FieldLabel>
-              <Input
-                id="qwen-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder={configured ? "输入新密钥以替换现有配置" : "输入新的 API Key"}
-                autoComplete="off"
-                aria-invalid={Boolean(error)}
-                disabled={pending}
-              />
-              <FieldDescription>保存后输入框会立即清空；客户端只保留“已配置”状态。</FieldDescription>
-              <FieldError>{error}</FieldError>
-            </Field>
-            <Field orientation="horizontal">
-              <Button type="submit" disabled={pending || !apiKey.trim()}>{pending ? "处理中…" : configured ? "替换密钥" : "保存密钥"}</Button>
-              {configured ? <Button type="button" variant="outline" disabled={pending} onClick={handleDelete}>移除密钥</Button> : null}
-            </Field>
-          </FieldGroup>
-        </form>
+      <SettingsSection
+        title="文本整理"
+        description="整理识别结果。"
+      >
+        <SettingRow
+          title="整理模型"
+          control={
+            <Select
+              value={models.rewriteModel}
+              onValueChange={(value) => void handleRewriteModelChange(value as QwenRewriteModel | null)}
+              disabled={controlsDisabled}
+            >
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {REWRITE_MODELS.map((model) => (
+                    <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          }
+        />
+        <SettingRow
+          title="模型测试"
+          control={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!configured || controlsDisabled || testing.rewrite}
+              onClick={() => void handleTest("rewrite")}
+            >
+              {testing.rewrite ? <Spinner data-icon="inline-start" /> : <WandSparklesIcon data-icon="inline-start" />}
+              {testing.rewrite ? "测试中…" : "测试文本整理"}
+            </Button>
+          }
+        />
+        <TestFeedback result={testResults.rewrite} />
       </SettingsSection>
     </SettingsPage>
+  );
+}
+
+function TestFeedback({ result }: { result?: TestResult }) {
+  if (!result) return null;
+  const success = result.status === "success";
+  return (
+    <Alert variant={success ? "default" : "destructive"}>
+      {success ? <CheckCircle2Icon /> : <AlertCircleIcon />}
+      <AlertTitle>{success ? "测试通过" : "测试失败"}</AlertTitle>
+      <AlertDescription>{result.message}</AlertDescription>
+    </Alert>
   );
 }

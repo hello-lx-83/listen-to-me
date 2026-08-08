@@ -7,8 +7,9 @@ use std::{
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::core::models::{
-    AppSettings, DictionaryCategory, DictionaryEntry, DictionaryEntryInput, HistoryRecord,
-    RewriteMode,
+    is_supported_qwen_asr_model, is_supported_qwen_rewrite_model, AppSettings, DictionaryCategory,
+    DictionaryEntry, DictionaryEntryInput, HistoryRecord, QwenModelSettings, RewriteMode,
+    DEFAULT_QWEN_ASR_MODEL, DEFAULT_QWEN_REWRITE_MODEL,
 };
 
 pub struct SqliteStore {
@@ -133,6 +134,49 @@ impl SqliteStore {
         transaction
             .commit()
             .map_err(|error| format!("failed to commit settings: {error}"))
+    }
+
+    pub fn qwen_model_settings(&self) -> Result<QwenModelSettings, String> {
+        let connection = self.connection()?;
+        let asr_model = setting(&connection, "qwen_asr_model")?
+            .filter(|model| is_supported_qwen_asr_model(model))
+            .unwrap_or_else(|| DEFAULT_QWEN_ASR_MODEL.to_owned());
+        let rewrite_model = setting(&connection, "qwen_rewrite_model")?
+            .filter(|model| is_supported_qwen_rewrite_model(model))
+            .unwrap_or_else(|| DEFAULT_QWEN_REWRITE_MODEL.to_owned());
+        Ok(QwenModelSettings {
+            asr_model,
+            rewrite_model,
+        })
+    }
+
+    pub fn update_qwen_model_settings(&self, settings: &QwenModelSettings) -> Result<(), String> {
+        if !is_supported_qwen_asr_model(&settings.asr_model) {
+            return Err("unsupported Qwen ASR model".to_owned());
+        }
+        if !is_supported_qwen_rewrite_model(&settings.rewrite_model) {
+            return Err("unsupported Qwen rewrite model".to_owned());
+        }
+
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("failed to update Qwen model settings: {error}"))?;
+        for (key, value) in [
+            ("qwen_asr_model", settings.asr_model.as_str()),
+            ("qwen_rewrite_model", settings.rewrite_model.as_str()),
+        ] {
+            transaction
+                .execute(
+                    "INSERT INTO settings(key, value) VALUES (?1, ?2)
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    params![key, value],
+                )
+                .map_err(|error| format!("failed to persist Qwen model settings: {error}"))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| format!("failed to commit Qwen model settings: {error}"))
     }
 
     pub fn add_history(
@@ -555,6 +599,38 @@ mod tests {
             })
             .expect("save dictionary");
         assert_eq!(store.list_dictionary().expect("list dictionary").len(), 1);
+    }
+
+    #[test]
+    fn persists_qwen_model_settings_and_rejects_unknown_models() {
+        let store = memory_store();
+        assert_eq!(
+            store
+                .qwen_model_settings()
+                .expect("read default model settings")
+                .rewrite_model,
+            DEFAULT_QWEN_REWRITE_MODEL
+        );
+
+        let settings = QwenModelSettings {
+            asr_model: "fun-asr-flash-2026-06-15".to_owned(),
+            rewrite_model: "qwen3.6-flash".to_owned(),
+        };
+        store
+            .update_qwen_model_settings(&settings)
+            .expect("save Qwen model settings");
+        let saved = store
+            .qwen_model_settings()
+            .expect("read Qwen model settings");
+        assert_eq!(saved.asr_model, "fun-asr-flash-2026-06-15");
+        assert_eq!(saved.rewrite_model, "qwen3.6-flash");
+
+        assert!(store
+            .update_qwen_model_settings(&QwenModelSettings {
+                asr_model: DEFAULT_QWEN_ASR_MODEL.to_owned(),
+                rewrite_model: "custom-model".to_owned(),
+            })
+            .is_err());
     }
 
     #[test]

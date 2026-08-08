@@ -9,6 +9,8 @@ use zeroize::Zeroize;
 
 const CHAT_COMPLETIONS_URL: &str =
     "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+const MULTIMODAL_GENERATION_URL: &str =
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 const RETRY_DELAY: Duration = Duration::from_millis(250);
 
 pub struct QwenClient {
@@ -100,13 +102,52 @@ impl QwenClient {
         finish_stream(output)
     }
 
+    pub async fn validate_request(&self, payload: Value) -> Result<(), String> {
+        self.send(payload).await.map(|_| ())
+    }
+
+    pub async fn fun_asr_completion(&self, payload: Value) -> Result<String, String> {
+        let response = self
+            .send_to(MULTIMODAL_GENERATION_URL, payload, true)
+            .await?;
+        let body = tokio::select! {
+            _ = self.cancellation.cancelled() => return Err("Qwen request was cancelled".to_owned()),
+            result = response.json::<Value>() => result
+                .map_err(|error| format!("Qwen response could not be decoded: {error}"))?,
+        };
+        body.pointer("/output/text")
+            .or_else(|| body.pointer("/output/output/sentence/text"))
+            .and_then(Value::as_str)
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| "Qwen returned an empty response".to_owned())
+    }
+
+    pub async fn validate_fun_asr_request(&self, payload: Value) -> Result<(), String> {
+        self.send_to(MULTIMODAL_GENERATION_URL, payload, true)
+            .await
+            .map(|_| ())
+    }
+
     async fn send(&self, payload: Value) -> Result<Response, String> {
+        self.send_to(CHAT_COMPLETIONS_URL, payload, false).await
+    }
+
+    async fn send_to(
+        &self,
+        url: &str,
+        payload: Value,
+        disable_sse: bool,
+    ) -> Result<Response, String> {
         for attempt in 0..=1 {
-            let request = self
+            let mut request = self
                 .client
-                .post(CHAT_COMPLETIONS_URL)
+                .post(url)
                 .bearer_auth(&self.api_key)
                 .json(&payload);
+            if disable_sse {
+                request = request.header("X-DashScope-SSE", "disable");
+            }
             let response = tokio::select! {
                 _ = self.cancellation.cancelled() => return Err("Qwen request was cancelled".to_owned()),
                 result = request.send() => result

@@ -6,11 +6,14 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::{
     adapters::{
-        ai::test_qwen_connection as test_qwen_adapter,
+        ai::{cloud_asr::test_qwen_asr_connection, test_qwen_rewrite_connection},
         secrets::credential_store::{wipe_string, CredentialStore},
     },
     app_state::AppState,
-    core::models::AppSettings,
+    core::models::{
+        is_supported_qwen_asr_model, is_supported_qwen_rewrite_model, AppSettings,
+        QwenModelSettings,
+    },
 };
 
 #[derive(Serialize)]
@@ -57,9 +60,37 @@ pub fn update_settings(
 }
 
 #[tauri::command]
-pub async fn test_qwen_connection() -> Result<(), String> {
+pub fn get_qwen_model_settings(state: State<'_, AppState>) -> Result<QwenModelSettings, String> {
+    state.store().qwen_model_settings()
+}
+
+#[tauri::command]
+pub fn update_qwen_model_settings(
+    state: State<'_, AppState>,
+    settings: QwenModelSettings,
+) -> Result<QwenModelSettings, String> {
+    state.store().update_qwen_model_settings(&settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
+pub async fn test_qwen_asr_model(model: String) -> Result<(), String> {
+    if !is_supported_qwen_asr_model(&model) {
+        return Err("unsupported Qwen ASR model".to_owned());
+    }
     let mut api_key = CredentialStore::qwen_api_key()?;
-    let result = test_qwen_adapter(api_key.clone()).await;
+    let result = test_qwen_asr_connection(api_key.clone(), model).await;
+    wipe_string(&mut api_key);
+    result
+}
+
+#[tauri::command]
+pub async fn test_qwen_rewrite_model(model: String) -> Result<(), String> {
+    if !is_supported_qwen_rewrite_model(&model) {
+        return Err("unsupported Qwen rewrite model".to_owned());
+    }
+    let mut api_key = CredentialStore::qwen_api_key()?;
+    let result = test_qwen_rewrite_connection(api_key.clone(), model).await;
     wipe_string(&mut api_key);
     result
 }

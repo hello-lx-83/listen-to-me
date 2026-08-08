@@ -62,6 +62,42 @@ pub struct AppSettings {
     pub history_retention_days: u32,
 }
 
+pub const DEFAULT_QWEN_ASR_MODEL: &str = "qwen3-asr-flash";
+pub const DEFAULT_QWEN_REWRITE_MODEL: &str = "qwen3.7-flash";
+
+pub fn is_supported_qwen_asr_model(model: &str) -> bool {
+    matches!(model, "qwen3-asr-flash" | "fun-asr-flash-2026-06-15")
+}
+
+pub fn is_supported_qwen_rewrite_model(model: &str) -> bool {
+    matches!(
+        model,
+        "qwen3.7-flash"
+            | "qwen3.7-plus"
+            | "qwen3.7-max"
+            | "qwen3.6-flash"
+            | "qwen3.6-plus"
+            | "qwen3.5-flash"
+            | "qwen3.5-plus"
+    )
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QwenModelSettings {
+    pub asr_model: String,
+    pub rewrite_model: String,
+}
+
+impl Default for QwenModelSettings {
+    fn default() -> Self {
+        Self {
+            asr_model: DEFAULT_QWEN_ASR_MODEL.to_owned(),
+            rewrite_model: DEFAULT_QWEN_REWRITE_MODEL.to_owned(),
+        }
+    }
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {

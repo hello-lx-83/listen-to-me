@@ -2,7 +2,6 @@ import {
   BookOpenIcon,
   Clock3Icon,
   HomeIcon,
-  Mic2Icon,
   SettingsIcon,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -35,7 +34,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" tooltip="Listen to Me">
-              <Mic2Icon />
+              <img src="/favicon.png" alt="" className="size-4 rounded-sm" />
               <span className="font-semibold group-data-[collapsible=icon]:hidden">Listen to Me</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

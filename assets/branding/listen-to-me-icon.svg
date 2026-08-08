@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Listen to Me app icon</title>
+  <desc id="desc">Three gold voice bars flow toward a cyan text insertion cursor.</desc>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="#17130f" />
+  <g fill="#e9b956">
+    <rect x="224" y="448" width="72" height="128" rx="36" />
+    <rect x="352" y="376" width="72" height="272" rx="36" />
+    <rect x="480" y="288" width="72" height="448" rx="36" />
+  </g>
+  <g fill="#65cde3">
+    <rect x="704" y="240" width="64" height="544" rx="32" />
+    <rect x="640" y="240" width="192" height="64" rx="32" />
+    <rect x="640" y="720" width="192" height="64" rx="32" />
+  </g>
+</svg>

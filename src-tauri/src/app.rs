@@ -33,6 +33,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::app::show_splashscreen,
             commands::app::finish_startup,
             commands::app::get_app_snapshot,
             commands::app::get_dashboard_overview,

@@ -7,6 +7,13 @@ use crate::{
 };
 
 #[tauri::command]
+pub fn show_splashscreen(app: AppHandle) {
+    if let Some(splashscreen) = app.get_webview_window("splashscreen") {
+        let _ = splashscreen.show();
+    }
+}
+
+#[tauri::command]
 pub fn get_app_snapshot(state: State<'_, AppState>) -> AppSnapshot {
     state.snapshot()
 }

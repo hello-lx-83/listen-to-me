@@ -1,8 +1,10 @@
 [package]
 name = "listen-to-me"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A Windows voice input app that transcribes, refines, and inserts speech into the active text field."
+authors = ["Xiang Li"]
+repository = "https://github.com/hello-lx-83/listen-to-me"
+homepage = "https://github.com/hello-lx-83/listen-to-me"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

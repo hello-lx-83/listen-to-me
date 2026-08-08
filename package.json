@@ -2,10 +2,14 @@
   "name": "listen-to-me",
   "private": true,
   "version": "0.1.0",
+  "description": "A Windows voice input app that transcribes, refines, and inserts speech into the active text field.",
+  "repository": "https://github.com/hello-lx-83/listen-to-me",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check": "pnpm build && cargo test --manifest-path src-tauri/Cargo.toml",
+    "package:windows": "tauri build --bundles nsis",
     "preview": "vite preview",
     "tauri": "tauri"
   },

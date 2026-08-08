@@ -58,7 +58,6 @@ pnpm dev
 
 ```powershell
 pnpm build
-pnpm tauri build
 ```
 
 开发调试版可执行文件也可以这样生成：
@@ -66,6 +65,16 @@ pnpm tauri build
 ```powershell
 pnpm tauri build --debug --no-bundle
 ```
+
+### Windows 安装包
+
+在项目根目录生成 NSIS 安装包：
+
+```powershell
+pnpm package:windows
+```
+
+所有构建产物都保留在当前项目的 `src-tauri/target/` 下，NSIS 安装包位于 `src-tauri/target/release/bundle/nsis/`。最终用户运行安装器时可以在目录选择页修改安装位置；默认位置是当前 Windows 用户的应用目录。当前安装包使用联网 WebView2 bootstrapper，尚未配置代码签名；正式对外分发前仍需完成发行者信息和 Windows 签名配置。
 
 ## 使用方式
 

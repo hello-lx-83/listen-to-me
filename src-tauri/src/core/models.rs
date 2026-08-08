@@ -59,6 +59,7 @@ pub struct AppSettings {
     pub language: String,
     pub rewrite_mode: RewriteMode,
     pub save_history: bool,
+    pub history_retention_days: u32,
 }
 
 impl Default for AppSettings {
@@ -68,6 +69,7 @@ impl Default for AppSettings {
             language: "auto".to_owned(),
             rewrite_mode: RewriteMode::Clean,
             save_history: true,
+            history_retention_days: 30,
         }
     }
 }
@@ -99,6 +101,13 @@ pub struct DictionaryEntryInput {
     pub source: String,
     pub replacement: String,
     pub category: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DictionaryCategory {
+    pub name: String,
+    pub entry_count: i64,
 }
 
 #[derive(Clone, Debug, Serialize)]

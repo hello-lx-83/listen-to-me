@@ -94,7 +94,7 @@ fn rewrite_instruction(mode: RewriteMode) -> String {
     let mode_instruction = match mode {
         RewriteMode::Raw => "原样返回 transcript，不得增删任何内容。",
         RewriteMode::Clean => {
-            "清理模式：仅删除无意义口头禅和重复，修正明显错别字与标点；不要扩写或重组内容。"
+            "智能整理模式：删除无意义口头禅和重复，修正明显错别字与标点；不要扩写或改变表达意图。仅当 transcript 明确包含多个并列事项、步骤，或说话人使用“第一、第二”等列举表达时，才整理为分段或要点；普通短句和单一事项不要重组。"
         }
         RewriteMode::Article => {
             "书面模式：将 transcript 整理成自然、简洁、连贯的书面表达，但不得新增信息或改变意图。"
@@ -248,6 +248,8 @@ mod tests {
         assert!(instruction.contains("疑问仍是疑问，请求仍是请求"));
         assert!(instruction.contains("不得翻译、意译"));
         assert!(instruction.contains("错误输出：好的，请告诉我"));
+        assert!(instruction.contains("多个并列事项"));
+        assert!(instruction.contains("普通短句和单一事项不要重组"));
     }
 
     #[test]

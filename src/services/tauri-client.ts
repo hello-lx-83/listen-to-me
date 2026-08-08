@@ -5,6 +5,7 @@ import type {
   AppSnapshot,
   DictionaryEntry,
   DictionaryEntryInput,
+  DictionaryCategory,
   DashboardOverview,
   HistoryRecord,
   QwenCredentialStatus,
@@ -35,4 +36,11 @@ export const tauriClient = {
   upsertDictionary: (input: DictionaryEntryInput) =>
     invoke<DictionaryEntry>("upsert_dictionary", { input }),
   deleteDictionary: (id: number) => invoke<void>("delete_dictionary", { id }),
+  listDictionaryCategories: () => invoke<DictionaryCategory[]>("list_dictionary_categories"),
+  createDictionaryCategory: (name: string) =>
+    invoke<DictionaryCategory>("create_dictionary_category", { name }),
+  renameDictionaryCategory: (oldName: string, newName: string) =>
+    invoke<DictionaryCategory>("rename_dictionary_category", { oldName, newName }),
+  deleteDictionaryCategory: (name: string) =>
+    invoke<void>("delete_dictionary_category", { name }),
 };

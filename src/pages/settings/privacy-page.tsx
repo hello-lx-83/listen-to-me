@@ -3,6 +3,7 @@ import { AlertCircleIcon, Trash2Icon } from "lucide-react";
 import { SettingRow, SettingsSection } from "@/components/app/settings-section";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { SettingsPage } from "@/pages/settings/settings-page";
@@ -24,6 +25,16 @@ export function PrivacySettingsPage() {
           title="保存输入历史"
           description="仅保存原始识别和整理文本，不保存音频及来源应用。"
           control={<Switch checked={settings.saveHistory} onCheckedChange={(checked) => update({ saveHistory: checked })} disabled={loading || saving} aria-label="保存输入历史" />}
+        />
+        <SettingRow
+          title="保留期限"
+          description="到期后自动删除；最多保留 1000 条。"
+          control={
+            <Select value={String(settings.historyRetentionDays)} onValueChange={(value) => value && update({ historyRetentionDays: Number(value) as 7 | 30 })} disabled={loading || saving || !settings.saveHistory}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectGroup><SelectItem value="7">7 天</SelectItem><SelectItem value="30">30 天</SelectItem></SelectGroup></SelectContent>
+            </Select>
+          }
         />
         <SettingRow title="清空历史" description="永久删除当前设备上的全部输入历史。" control={<Button variant="destructive" size="sm" onClick={clearHistory}><Trash2Icon data-icon="inline-start" />清空</Button>} />
       </SettingsSection>

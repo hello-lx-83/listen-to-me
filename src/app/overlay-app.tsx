@@ -12,10 +12,11 @@ import { useEffect, useLayoutEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import type { VoiceSessionState } from "@/shared/contracts";
+import { tauriClient } from "@/services/tauri-client";
+import type { RewriteMode, VoiceSessionState } from "@/shared/contracts";
+import { REWRITE_MODE_LABELS } from "@/shared/rewrite-mode-config";
 
 interface StageMetric {
   stage: "recording" | "transcribing" | "rewriting";
@@ -83,7 +84,14 @@ export function OverlayApp() {
   const [inputLevel, setInputLevel] = useState(0);
   const [metrics, setMetrics] = useState<Partial<Record<StageMetric["stage"], number>>>({});
   const [isPointerOver, setIsPointerOver] = useState(false);
-  const content = stateContent[state];
+  const [rewriteMode, setRewriteMode] = useState<RewriteMode>("clean");
+  const [modeNotice, setModeNotice] = useState(false);
+  const content = modeNotice ? {
+    icon: WandSparklesIcon,
+    title: `已切换到${REWRITE_MODE_LABELS[rewriteMode]}`,
+    description: "长按右 Alt 开始使用",
+    badge: REWRITE_MODE_LABELS[rewriteMode],
+  } : stateContent[state];
   const StateIcon = content.icon;
 
   useLayoutEffect(() => {
@@ -96,10 +104,16 @@ export function OverlayApp() {
   }, []);
 
   useEffect(() => {
+    const syncMode = () => void tauriClient.getSettings()
+      .then((settings) => setRewriteMode(settings.rewriteMode))
+      .catch(() => undefined);
+    syncMode();
     const unlisten = listen<VoiceSessionState>(
       "voice://state-changed",
       (event) => {
         setState(event.payload);
+        if (event.payload === "recording") syncMode();
+        if (event.payload !== "idle") setModeNotice(false);
         if (event.payload !== "failed") setErrorMessage("");
         if (event.payload === "arming" || event.payload === "recording") setMetrics({});
       },
@@ -109,14 +123,28 @@ export function OverlayApp() {
     const unlistenMetric = listen<StageMetric>("voice://stage-metric", (event) => {
       setMetrics((current) => ({ ...current, [event.payload.stage]: event.payload.elapsedMs }));
     });
+    const unlistenMode = listen<RewriteMode>("voice://mode-changed", (event) => {
+      setRewriteMode(event.payload);
+      setModeNotice(true);
+    });
 
     return () => {
       void unlisten.then((dispose) => dispose());
       void unlistenError.then((dispose) => dispose());
       void unlistenLevel.then((dispose) => dispose());
       void unlistenMetric.then((dispose) => dispose());
+      void unlistenMode.then((dispose) => dispose());
     };
   }, []);
+
+  useEffect(() => {
+    if (!modeNotice || state !== "idle") return;
+    const timer = window.setTimeout(() => {
+      setModeNotice(false);
+      void getCurrentWindow().hide();
+    }, 1_400);
+    return () => window.clearTimeout(timer);
+  }, [modeNotice, rewriteMode, state]);
 
   useEffect(() => {
     if (state !== "failed" || isPointerOver) return;
@@ -126,7 +154,9 @@ export function OverlayApp() {
     return () => window.clearTimeout(timer);
   }, [isPointerOver, state]);
 
-  const description = state === "rewriting" && metrics.transcribing !== undefined
+  const description = modeNotice
+    ? content.description
+    : state === "rewriting" && metrics.transcribing !== undefined
     ? `识别 ${formatDuration(metrics.transcribing)} · 正在整理`
     : state === "injecting" && metrics.transcribing !== undefined
       ? `识别 ${formatDuration(metrics.transcribing)} · 整理 ${formatDuration(metrics.rewriting) ?? "完成"}`
@@ -157,7 +187,7 @@ export function OverlayApp() {
         </div>
         {state !== "failed" ? (
           <Badge variant="secondary">
-            {state === "recording" ? <Kbd>R Alt</Kbd> : content.badge}
+            {state === "recording" || state === "rewriting" ? REWRITE_MODE_LABELS[rewriteMode] : content.badge}
           </Badge>
         ) : null}
         {state === "failed" ? (

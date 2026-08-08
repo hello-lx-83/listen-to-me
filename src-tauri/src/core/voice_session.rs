@@ -11,6 +11,7 @@ pub struct VoiceSession {
 pub enum HoldAction {
     Begin,
     Finish,
+    Tap,
     Cancel,
 }
 
@@ -54,7 +55,7 @@ impl HoldController {
             self.active = false;
             Some(HoldAction::Finish)
         } else {
-            None
+            Some(HoldAction::Tap)
         }
     }
 
@@ -114,7 +115,7 @@ mod tests {
         controller.press(Duration::ZERO);
 
         assert_eq!(controller.poll(Duration::from_millis(100)), None);
-        assert_eq!(controller.release(), None);
+        assert_eq!(controller.release(), Some(HoldAction::Tap));
     }
 
     #[test]

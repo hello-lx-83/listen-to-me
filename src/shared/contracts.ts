@@ -24,6 +24,7 @@ export interface AppSettings {
   language: "auto" | "zh" | "en";
   rewriteMode: RewriteMode;
   saveHistory: boolean;
+  historyRetentionDays: 7 | 30;
 }
 
 export interface HistoryRecord {
@@ -47,6 +48,11 @@ export interface DictionaryEntryInput {
   source: string;
   replacement: string;
   category: string;
+}
+
+export interface DictionaryCategory {
+  name: string;
+  entryCount: number;
 }
 
 export interface DashboardOverview {

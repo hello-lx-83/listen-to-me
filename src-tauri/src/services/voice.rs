@@ -48,6 +48,8 @@ impl VoiceService {
                         dictionary
                             .iter()
                             .map(|entry| entry.replacement.clone())
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
                             .collect(),
                     );
                     recognizer
@@ -86,12 +88,61 @@ impl CloudVoiceModels {
 }
 
 pub fn apply_dictionary(transcript: &Transcript, dictionary: &[DictionaryEntry]) -> Transcript {
-    let mut entries = dictionary.iter().collect::<Vec<_>>();
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.source.chars().count()));
-    let corrected = entries.iter().fold(transcript.0.clone(), |text, entry| {
-        text.replace(&entry.source, &entry.replacement)
-    });
+    let mut replacements = dictionary
+        .iter()
+        .flat_map(|entry| {
+            dictionary_aliases(&entry.source)
+                .into_iter()
+                .map(move |alias| (alias, entry.replacement.as_str()))
+        })
+        .collect::<Vec<_>>();
+    replacements.sort_by_key(|(alias, _)| std::cmp::Reverse(alias.chars().count()));
+    let corrected =
+        replacements
+            .into_iter()
+            .fold(transcript.0.clone(), |text, (alias, replacement)| {
+                if alias.is_ascii() {
+                    replace_ascii_case_insensitive(&text, alias, replacement)
+                } else {
+                    text.replace(alias, replacement)
+                }
+            });
     Transcript(corrected)
+}
+
+fn dictionary_aliases(source: &str) -> Vec<&str> {
+    source
+        .split([',', '，', '、', '\n', ';', '；'])
+        .map(str::trim)
+        .filter(|alias| !alias.is_empty())
+        .collect()
+}
+
+fn replace_ascii_case_insensitive(text: &str, source: &str, replacement: &str) -> String {
+    let needle = source.to_ascii_lowercase();
+    let mut output = text.to_owned();
+    let mut cursor = 0;
+
+    while let Some(offset) = output[cursor..].to_ascii_lowercase().find(&needle) {
+        let start = cursor + offset;
+        let end = start + source.len();
+        let starts_inside_word = output[..start]
+            .chars()
+            .next_back()
+            .is_some_and(|character| character.is_ascii_alphanumeric() || character == '_');
+        let ends_inside_word = output[end..]
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphanumeric() || character == '_');
+        if starts_inside_word || ends_inside_word {
+            cursor = end;
+            continue;
+        }
+        output.replace_range(start..end, replacement);
+        cursor = start + replacement.len();
+    }
+
+    output
 }
 
 #[cfg(test)]
@@ -119,6 +170,42 @@ mod tests {
         assert_eq!(
             apply_dictionary(&Transcript("使用千问语音".to_owned()), &entries).0,
             "使用Qwen-ASR"
+        );
+    }
+
+    #[test]
+    fn dictionary_accepts_multiple_spoken_forms_and_normalizes_ascii_case() {
+        let entries = vec![DictionaryEntry {
+            id: 1,
+            source: "智能体、诶真特, agent".to_owned(),
+            replacement: "Agent".to_owned(),
+            category: "AI 术语".to_owned(),
+            updated_at: 0,
+        }];
+
+        assert_eq!(
+            apply_dictionary(
+                &Transcript("让智能体和 AGENT 一起工作".to_owned()),
+                &entries
+            )
+            .0,
+            "让Agent和 Agent 一起工作"
+        );
+    }
+
+    #[test]
+    fn ascii_dictionary_terms_do_not_replace_inside_other_words() {
+        let entries = vec![DictionaryEntry {
+            id: 1,
+            source: "agent".to_owned(),
+            replacement: "Agent".to_owned(),
+            category: "AI 术语".to_owned(),
+            updated_at: 0,
+        }];
+
+        assert_eq!(
+            apply_dictionary(&Transcript("magenta uses agent".to_owned()), &entries).0,
+            "magenta uses Agent"
         );
     }
 }

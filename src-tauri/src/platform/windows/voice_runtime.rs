@@ -16,7 +16,7 @@ use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowR
 use crate::{
     app_state::AppState,
     core::{
-        models::{RewrittenText, VoiceSessionState},
+        models::{RewriteMode, RewrittenText, VoiceSessionState},
         voice_session::{HoldAction, HoldController},
     },
     platform::windows::{
@@ -33,6 +33,7 @@ const STATE_EVENT: &str = "voice://state-changed";
 const ERROR_EVENT: &str = "voice://error";
 const LEVEL_EVENT: &str = "voice://input-level";
 const METRIC_EVENT: &str = "voice://stage-metric";
+const MODE_EVENT: &str = "voice://mode-changed";
 const LEVEL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Serialize)]
@@ -88,6 +89,9 @@ fn run(app: AppHandle, receiver: Receiver<RightAltEvent>) {
                         cancellation.clone(),
                     );
                 }
+                Some(HoldAction::Tap) if !processing.load(Ordering::Acquire) => {
+                    cycle_rewrite_mode(&app);
+                }
                 _ if !processing.load(Ordering::Acquire) => reset(&app),
                 _ => {}
             },
@@ -119,6 +123,36 @@ fn run(app: AppHandle, receiver: Receiver<RightAltEvent>) {
             }
             Err(RecvTimeoutError::Disconnected) => break,
         }
+    }
+}
+
+fn cycle_rewrite_mode(app: &AppHandle) {
+    let store = app.state::<AppState>();
+    let mut settings = match store.store().settings() {
+        Ok(settings) => settings,
+        Err(error) => {
+            eprintln!("[voice-runtime] failed to read mode: {error}");
+            reset(app);
+            return;
+        }
+    };
+    settings.rewrite_mode = match settings.rewrite_mode {
+        RewriteMode::Clean => RewriteMode::Raw,
+        RewriteMode::Raw => RewriteMode::Clean,
+        RewriteMode::Structured | RewriteMode::Article => RewriteMode::Clean,
+    };
+    if let Err(error) = store.store().update_settings(&settings) {
+        eprintln!("[voice-runtime] failed to change mode: {error}");
+        reset(app);
+        return;
+    }
+
+    set_state(app, VoiceSessionState::Idle);
+    if let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) {
+        let _ = position_overlay(app, &overlay);
+        let _ = apply_rounded_window_region(&overlay);
+        let _ = app.emit_to(OVERLAY_LABEL, MODE_EVENT, settings.rewrite_mode);
+        let _ = overlay.show();
     }
 }
 
@@ -259,6 +293,8 @@ fn finish_session(
                         RewrittenText(corrected.0)
                     }
                 };
+                let rewritten = apply_dictionary(&crate::core::models::Transcript(rewritten.0), &dictionary);
+                let rewritten = RewrittenText(rewritten.0);
                 emit_metric(&worker_app, "rewriting", elapsed_millis(rewriting_started));
                 ensure_not_cancelled(&worker_token)?;
                 if settings.save_history {

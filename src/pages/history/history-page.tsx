@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardIcon, HistoryIcon, Trash2Icon } from "lucide-react";
+import { CalendarClockIcon, ClipboardIcon, HistoryIcon, Trash2Icon } from "lucide-react";
 
 import { PageHeader } from "@/components/app/page-header";
 import { DataPagination } from "@/components/app/data-pagination";
@@ -8,18 +8,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { tauriClient } from "@/services/tauri-client";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import type { HistoryRecord, RewriteMode } from "@/shared/contracts";
+import { REWRITE_MODE_LABELS } from "@/shared/rewrite-mode-config";
 
-const modeLabels: Record<RewriteMode, string> = {
-  raw: "原样",
-  clean: "智能清理",
-  article: "整理成文",
-  structured: "结构化",
-};
+const modeLabels: Record<RewriteMode, string> = REWRITE_MODE_LABELS;
 
 const historyDateFormatter = new Intl.DateTimeFormat("zh-CN", {
   month: "2-digit",
@@ -30,6 +28,7 @@ const historyDateFormatter = new Intl.DateTimeFormat("zh-CN", {
 const PAGE_SIZE = 8;
 
 export function HistoryPage() {
+  const { settings, loading: settingsLoading, saving: settingsSaving, error: settingsError, update } = useAppSettings();
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [selected, setSelected] = useState<HistoryRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,15 +84,22 @@ export function HistoryPage() {
     }
   }
 
+  async function changeRetention(value: string | null) {
+    if (!value) return;
+    const next = await update({ historyRetentionDays: Number(value) as 7 | 30 });
+    if (next) await loadHistory();
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
       <PageHeader
         title="历史记录"
-        description="查看原始识别文本和整理后的结果。"
+        description={`仅保存在当前设备，自动保留 ${settings.historyRetentionDays} 天，最多 1000 条。`}
         actions={records.length ? <Button variant="outline" onClick={clearAll}><Trash2Icon data-icon="inline-start" />清空</Button> : undefined}
       />
 
       {error ? <Alert variant="destructive"><AlertTitle>操作失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+      {settingsError ? <Alert variant="destructive"><AlertTitle>设置保存失败</AlertTitle><AlertDescription>{settingsError}</AlertDescription></Alert> : null}
 
       {loading ? (
         <div className="flex min-h-48 items-center justify-center"><Spinner /></div>
@@ -107,7 +113,7 @@ export function HistoryPage() {
         </Empty>
       ) : (
         <div className="overflow-hidden rounded-xl border">
-          <div className="flex items-center border-b p-3">
+          <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center">
             <Input
               value={query}
               onChange={(event) => { setQuery(event.target.value); setPage(1); }}
@@ -115,6 +121,13 @@ export function HistoryPage() {
               aria-label="检索历史记录"
               className="max-w-sm"
             />
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{filteredRecords.length} 条</span>
+              <Select value={String(settings.historyRetentionDays)} onValueChange={changeRetention} disabled={settingsLoading || settingsSaving}>
+                <SelectTrigger className="w-32"><CalendarClockIcon /><SelectValue /></SelectTrigger>
+                <SelectContent><SelectGroup><SelectItem value="7">保留 7 天</SelectItem><SelectItem value="30">保留 30 天</SelectItem></SelectGroup></SelectContent>
+              </Select>
+            </div>
           </div>
           {filteredRecords.length === 0 ? (
             <Empty className="min-h-48">
@@ -131,7 +144,10 @@ export function HistoryPage() {
                     <TableRow key={record.id}>
                       <TableCell>{formatDate(record.createdAt)}</TableCell>
                       <TableCell><Badge variant="secondary">{modeLabels[record.mode]}</Badge></TableCell>
-                      <TableCell className="max-w-md truncate">{record.output}</TableCell>
+                      <TableCell className="max-w-md">
+                        <p className="truncate">{record.output}</p>
+                        {record.transcript !== record.output ? <p className="mt-0.5 truncate text-xs text-muted-foreground">原始：{record.transcript}</p> : null}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="sm" onClick={() => setSelected(record)}>查看</Button>
@@ -177,5 +193,12 @@ export function HistoryPage() {
 }
 
 function formatDate(timestamp: number) {
-  return historyDateFormatter.format(new Date(timestamp));
+  const date = new Date(timestamp);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 24 * 60 * 60 * 1_000;
+  const time = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(date);
+  if (timestamp >= startOfToday) return `今天 ${time}`;
+  if (timestamp >= startOfYesterday) return `昨天 ${time}`;
+  return historyDateFormatter.format(date);
 }

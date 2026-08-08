@@ -1,6 +1,6 @@
 [package]
 name = "listen-to-me"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Windows voice input app that transcribes, refines, and inserts speech into the active text field."
 authors = ["Xiang Li"]
 repository = "https://github.com/hello-lx-83/listen-to-me"

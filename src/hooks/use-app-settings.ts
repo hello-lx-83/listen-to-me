@@ -8,6 +8,7 @@ const defaults: AppSettings = {
   language: "auto",
   rewriteMode: "clean",
   saveHistory: true,
+  historyRetentionDays: 30,
 };
 
 export function useAppSettings() {

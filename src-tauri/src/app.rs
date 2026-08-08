@@ -51,6 +51,10 @@ pub fn run() {
             commands::dictionary::list_dictionary,
             commands::dictionary::upsert_dictionary,
             commands::dictionary::delete_dictionary,
+            commands::dictionary::list_dictionary_categories,
+            commands::dictionary::create_dictionary_category,
+            commands::dictionary::rename_dictionary_category,
+            commands::dictionary::delete_dictionary_category,
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {

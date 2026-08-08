@@ -1,5 +1,44 @@
 # Repository instructions
 
+## Project overview
+
+- Listen to Me is a Windows desktop voice-input application.
+- The frontend uses React 19, TypeScript, Vite, Tailwind CSS 4, Base UI, and shadcn.
+- The native application uses Tauri 2 and Rust.
+- The voice flow captures audio, calls cloud speech recognition and rewriting services, applies deterministic dictionary replacements, and inserts the final text into the active Windows text field.
+- The current release line is Windows x64. Local/offline models and GPU acceleration are not part of the current build.
+
+## Common commands
+
+- Install dependencies: `pnpm install`
+- Start the Tauri development app: `pnpm tauri dev`
+- Start the frontend only: `pnpm dev`
+- Build the frontend: `pnpm build`
+- Run the required validation suite: `pnpm check`
+- Build the Windows NSIS installer: `pnpm package:windows`
+
+Run commands from the repository root unless a command explicitly says otherwise.
+
+## Repository map
+
+- `src/`: React frontend, routes, layouts, hooks, and UI components.
+- `src-tauri/src/`: Rust application, commands, services, adapters, and Windows platform integration.
+- `src-tauri/tauri.conf.json`: Tauri window and bundle configuration.
+- `src-tauri/capabilities/`: Tauri capability declarations.
+- `public/splashscreen.html`: startup splash content and reveal handshake.
+- `assets/branding/`: editable source branding assets.
+- `docs/`: architecture, implementation, screenshots, and Windows manual-test documentation.
+
+## Development rules
+
+- Preserve unrelated user changes in a dirty working tree. Inspect diffs before staging or committing.
+- Never commit API keys, credentials, `.env` files, recordings, user history, or other local/private data.
+- Keep frontend-facing Tauri commands thin; put business behavior in services/core code and platform-specific behavior under the platform adapters.
+- Treat the Windows global shortcut, clipboard, focus restoration, and text-injection path as regression-sensitive. Run the relevant Rust tests after changing them.
+- Keep application versions synchronized across `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` when preparing a new version.
+- Do not introduce Vulkan, CUDA, local-model runtimes, or GPU build flags unless the requested feature actually needs them.
+- Use `apply_patch` for intentional source/documentation edits and keep generated build output out of Git.
+
 ## Windows release workflow
 
 When the user asks to package, publish, republish, or update the Windows installer, follow this workflow from the repository root.

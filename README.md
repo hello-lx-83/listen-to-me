@@ -15,13 +15,15 @@ Listen to Me 是一款面向 Windows 的桌面语音输入工具：按住右 Alt
 - 系统托盘、单实例运行和开机启动
 - Escape 取消当前语音会话
 
-## 设计预览
+## 当前界面
 
-以下图片是产品设计稿，实际界面会随实现继续调整。
+以下截图来自 `0.1.0` 当前代码的实际渲染结果。历史记录截图使用演示数据，不包含真实用户内容。
 
-![Listen to Me 主窗口设计](docs/design/main-window-concept.png)
+![Listen to Me 0.1.0 首页](docs/screenshots/home-v0.1.0.png)
 
-![语音输入悬浮窗状态设计](docs/design/floating-voice-states-concept.png)
+![Listen to Me 0.1.0 历史记录](docs/screenshots/history-v0.1.0.png)
+
+![Listen to Me 0.1.0 语音输入悬浮窗](docs/screenshots/voice-overlay-v0.1.0.png)
 
 ## 技术栈
 

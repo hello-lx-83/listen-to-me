@@ -51,8 +51,9 @@ Record failures separately for:
 - Elevated applications. Windows blocks lower-integrity input injection into
   higher-integrity processes.
 - Keyboard layouts where Right Alt acts as AltGr.
-- Applications that ignore Unicode `SendInput`; these will use the future
-  transactional clipboard fallback.
+- Applications or security policies that block the standard `Ctrl+V` paste
+  shortcut. The transcript remains available in history when automatic paste
+  fails.
 
 ## Management client test
 
@@ -83,14 +84,13 @@ Record failures separately for:
 
 - Right Alt is reserved and swallowed while the application is running.
 - The overlay is centered for the spike; final placement is not implemented.
-- Text is injected directly with Unicode `SendInput`. Clipboard fallback and
-  full clipboard restoration are deferred until an incompatible target is
-  reproduced.
+- Text is inserted through one clipboard path: place the complete Unicode
+  transcript on the clipboard and send `Ctrl+V`. The transcript remains on the
+  clipboard so it can be pasted manually if automatic insertion is blocked.
 - Audio capture is capped at two minutes and transcription begins after Right Alt
   is released. Provider responses are consumed as a stream, but microphone audio
   is not uploaded while recording.
 - A failed session shows a sanitized reason; detailed diagnostic logs are not yet
   exposed in the client.
-- The current direct Unicode injection cannot cross Windows integrity levels.
-  Clipboard fallback remains deferred until a reproducible incompatible target
-  is identified, because restoring every clipboard format safely is non-trivial.
+- The paste shortcut cannot cross Windows integrity levels. An elevated target
+  requires an equally elevated Listen to Me process.

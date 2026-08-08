@@ -21,7 +21,7 @@ use crate::{
     },
     platform::windows::{
         keyboard_hook::{self, RightAltEvent},
-        text_injector::send_unicode_text,
+        text_injector::paste_unicode_text,
     },
     services::voice::{apply_dictionary, VoiceService},
 };
@@ -270,7 +270,12 @@ fn finish_session(
                 }
                 ensure_not_cancelled(&worker_token)?;
                 set_state(&worker_app, VoiceSessionState::Injecting);
-                send_unicode_text(&rewritten.0)
+                let owner = worker_app
+                    .get_webview_window(OVERLAY_LABEL)
+                    .ok_or_else(|| "voice overlay window is unavailable".to_owned())?
+                    .hwnd()
+                    .map_err(|error| format!("failed to get clipboard owner window: {error}"))?;
+                paste_unicode_text(owner, &rewritten.0)
             });
 
             worker_processing.store(false, Ordering::Release);

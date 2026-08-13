@@ -16,7 +16,12 @@ pub trait SpeechRecognizer: Send + Sync {
 }
 
 pub trait TextRewriter: Send + Sync {
-    fn rewrite(&self, transcript: Transcript, mode: RewriteMode) -> PortFuture<'_, RewrittenText>;
+    fn rewrite(
+        &self,
+        transcript: Transcript,
+        mode: RewriteMode,
+        protected_terms: Vec<String>,
+    ) -> PortFuture<'_, RewrittenText>;
 }
 
 pub trait TextInjector: Send + Sync {

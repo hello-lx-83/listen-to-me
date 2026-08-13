@@ -7,9 +7,9 @@ use std::{
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::core::models::{
-    is_supported_qwen_asr_model, is_supported_qwen_rewrite_model, AppSettings, DictionaryCategory,
-    DictionaryEntry, DictionaryEntryInput, HistoryRecord, QwenModelSettings, RewriteMode,
-    DEFAULT_QWEN_ASR_MODEL, DEFAULT_QWEN_REWRITE_MODEL,
+    is_supported_qwen_rewrite_model, AppSettings, DictionaryCategory, DictionaryEntry,
+    DictionaryEntryInput, HistoryRecord, QwenModelSettings, RewriteMode, DEFAULT_QWEN_ASR_MODEL,
+    DEFAULT_QWEN_REWRITE_MODEL,
 };
 
 pub struct SqliteStore {
@@ -61,6 +61,9 @@ impl SqliteStore {
                    SELECT DISTINCT category, 0 FROM dictionary WHERE trim(category) <> '';",
             )
             .map_err(|error| format!("failed to migrate local database: {error}"))?;
+        connection
+            .execute("DELETE FROM settings WHERE key = 'qwen_asr_model'", [])
+            .map_err(|error| format!("failed to migrate fixed ASR model setting: {error}"))?;
         let retention_days = setting(&connection, "history_retention_days")?
             .and_then(|value| value.parse::<u32>().ok())
             .filter(|days| matches!(days, 7 | 30))
@@ -138,20 +141,17 @@ impl SqliteStore {
 
     pub fn qwen_model_settings(&self) -> Result<QwenModelSettings, String> {
         let connection = self.connection()?;
-        let asr_model = setting(&connection, "qwen_asr_model")?
-            .filter(|model| is_supported_qwen_asr_model(model))
-            .unwrap_or_else(|| DEFAULT_QWEN_ASR_MODEL.to_owned());
         let rewrite_model = setting(&connection, "qwen_rewrite_model")?
             .filter(|model| is_supported_qwen_rewrite_model(model))
             .unwrap_or_else(|| DEFAULT_QWEN_REWRITE_MODEL.to_owned());
         Ok(QwenModelSettings {
-            asr_model,
+            asr_model: DEFAULT_QWEN_ASR_MODEL.to_owned(),
             rewrite_model,
         })
     }
 
     pub fn update_qwen_model_settings(&self, settings: &QwenModelSettings) -> Result<(), String> {
-        if !is_supported_qwen_asr_model(&settings.asr_model) {
+        if settings.asr_model != DEFAULT_QWEN_ASR_MODEL {
             return Err("unsupported Qwen ASR model".to_owned());
         }
         if !is_supported_qwen_rewrite_model(&settings.rewrite_model) {
@@ -162,18 +162,13 @@ impl SqliteStore {
         let transaction = connection
             .transaction()
             .map_err(|error| format!("failed to update Qwen model settings: {error}"))?;
-        for (key, value) in [
-            ("qwen_asr_model", settings.asr_model.as_str()),
-            ("qwen_rewrite_model", settings.rewrite_model.as_str()),
-        ] {
-            transaction
-                .execute(
-                    "INSERT INTO settings(key, value) VALUES (?1, ?2)
-                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    params![key, value],
-                )
-                .map_err(|error| format!("failed to persist Qwen model settings: {error}"))?;
-        }
+        transaction
+            .execute(
+                "INSERT INTO settings(key, value) VALUES ('qwen_rewrite_model', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![settings.rewrite_model],
+            )
+            .map_err(|error| format!("failed to persist Qwen model settings: {error}"))?;
         transaction
             .commit()
             .map_err(|error| format!("failed to commit Qwen model settings: {error}"))
@@ -602,7 +597,7 @@ mod tests {
     }
 
     #[test]
-    fn persists_qwen_model_settings_and_rejects_unknown_models() {
+    fn persists_rewrite_model_and_keeps_asr_model_fixed() {
         let store = memory_store();
         assert_eq!(
             store
@@ -613,7 +608,7 @@ mod tests {
         );
 
         let settings = QwenModelSettings {
-            asr_model: "fun-asr-flash-2026-06-15".to_owned(),
+            asr_model: DEFAULT_QWEN_ASR_MODEL.to_owned(),
             rewrite_model: "qwen3.6-flash".to_owned(),
         };
         store
@@ -622,13 +617,35 @@ mod tests {
         let saved = store
             .qwen_model_settings()
             .expect("read Qwen model settings");
-        assert_eq!(saved.asr_model, "fun-asr-flash-2026-06-15");
+        assert_eq!(saved.asr_model, DEFAULT_QWEN_ASR_MODEL);
         assert_eq!(saved.rewrite_model, "qwen3.6-flash");
+
+        store
+            .connection()
+            .expect("database connection")
+            .execute(
+                "INSERT INTO settings(key, value) VALUES ('qwen_asr_model', 'legacy-model')",
+                [],
+            )
+            .expect("save legacy ASR setting");
+        assert_eq!(
+            store
+                .qwen_model_settings()
+                .expect("read fixed ASR model")
+                .asr_model,
+            DEFAULT_QWEN_ASR_MODEL
+        );
 
         assert!(store
             .update_qwen_model_settings(&QwenModelSettings {
                 asr_model: DEFAULT_QWEN_ASR_MODEL.to_owned(),
                 rewrite_model: "custom-model".to_owned(),
+            })
+            .is_err());
+        assert!(store
+            .update_qwen_model_settings(&QwenModelSettings {
+                asr_model: "legacy-model".to_owned(),
+                rewrite_model: DEFAULT_QWEN_REWRITE_MODEL.to_owned(),
             })
             .is_err());
     }

@@ -17,9 +17,7 @@ export interface QwenCredentialStatus {
   configured: boolean;
 }
 
-export type QwenAsrModel =
-  | "qwen3-asr-flash"
-  | "fun-asr-flash-2026-06-15";
+export type QwenAsrModel = "qwen-audio-3.0-asr-flash";
 export type QwenRewriteModel =
   | "qwen3.7-flash"
   | "qwen3.7-plus"

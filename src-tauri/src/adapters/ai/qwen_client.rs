@@ -102,11 +102,7 @@ impl QwenClient {
         finish_stream(output)
     }
 
-    pub async fn validate_request(&self, payload: Value) -> Result<(), String> {
-        self.send(payload).await.map(|_| ())
-    }
-
-    pub async fn fun_asr_completion(&self, payload: Value) -> Result<String, String> {
+    pub async fn asr_completion(&self, payload: Value) -> Result<String, String> {
         let response = self
             .send_to(MULTIMODAL_GENERATION_URL, payload, true)
             .await?;
@@ -115,18 +111,11 @@ impl QwenClient {
             result = response.json::<Value>() => result
                 .map_err(|error| format!("Qwen response could not be decoded: {error}"))?,
         };
-        body.pointer("/output/text")
-            .or_else(|| body.pointer("/output/output/sentence/text"))
+        asr_text(&body)
             .and_then(Value::as_str)
             .filter(|text| !text.trim().is_empty())
             .map(str::to_owned)
             .ok_or_else(|| "Qwen returned an empty response".to_owned())
-    }
-
-    pub async fn validate_fun_asr_request(&self, payload: Value) -> Result<(), String> {
-        self.send_to(MULTIMODAL_GENERATION_URL, payload, true)
-            .await
-            .map(|_| ())
     }
 
     async fn send(&self, payload: Value) -> Result<Response, String> {
@@ -168,6 +157,11 @@ impl QwenClient {
         }
         Err("Qwen service request failed after retry".to_owned())
     }
+}
+
+fn asr_text(body: &Value) -> Option<&Value> {
+    body.pointer("/output/text")
+        .or_else(|| body.pointer("/output/output/sentence/text"))
 }
 
 fn parse_sse_line(line: &[u8], output: &mut String) -> Result<bool, String> {
@@ -278,5 +272,16 @@ mod tests {
         .expect("parse delta"));
         assert!(parse_sse_line(b"data: [DONE]\n", &mut output).expect("parse done"));
         assert_eq!(output, "你");
+    }
+
+    #[test]
+    fn parses_current_and_legacy_dashscope_asr_responses() {
+        let current = serde_json::json!({ "output": { "text": "当前结果" } });
+        let legacy = serde_json::json!({
+            "output": { "output": { "sentence": { "text": "兼容结果" } } }
+        });
+
+        assert_eq!(asr_text(&current).and_then(Value::as_str), Some("当前结果"));
+        assert_eq!(asr_text(&legacy).and_then(Value::as_str), Some("兼容结果"));
     }
 }

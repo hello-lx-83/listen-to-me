@@ -1,11 +1,13 @@
 use std::{
+    fs,
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError},
         Arc, Mutex,
     },
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use serde::Serialize;
@@ -14,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn};
 
 use crate::{
+    adapters::audio::wav::encode_mono_pcm16,
     app_state::AppState,
     core::{
         models::{RewriteMode, RewrittenText, VoiceSessionState},
@@ -23,10 +26,11 @@ use crate::{
         keyboard_hook::{self, RightAltEvent},
         text_injector::paste_unicode_text,
     },
-    services::voice::{apply_dictionary, VoiceService},
+    services::voice::{apply_dictionary, dictionary_terms_in_transcript, VoiceService},
 };
 
 const HOLD_THRESHOLD: Duration = Duration::from_millis(220);
+const RELEASE_TAIL: Duration = Duration::from_millis(120);
 const IDLE_WAIT: Duration = Duration::from_secs(60);
 const OVERLAY_LABEL: &str = "voice-overlay";
 const STATE_EVENT: &str = "voice://state-changed";
@@ -76,7 +80,10 @@ fn run(app: AppHandle, receiver: Receiver<RightAltEvent>) {
             Ok(RightAltEvent::Pressed) => {
                 if !processing.load(Ordering::Acquire) && !hold.is_pending() {
                     hold.press(clock.elapsed());
-                    set_state(&app, VoiceSessionState::Arming);
+                    capturing = arm(&app, &voice);
+                    if !capturing {
+                        let _ = hold.cancel();
+                    }
                 }
             }
             Ok(RightAltEvent::Released) => match hold.release() {
@@ -89,7 +96,9 @@ fn run(app: AppHandle, receiver: Receiver<RightAltEvent>) {
                         cancellation.clone(),
                     );
                 }
-                Some(HoldAction::Tap) if !processing.load(Ordering::Acquire) => {
+                Some(HoldAction::Tap) if capturing && !processing.load(Ordering::Acquire) => {
+                    let _ = tauri::async_runtime::block_on(voice.cancel_recording());
+                    capturing = false;
                     cycle_rewrite_mode(&app);
                 }
                 _ if !processing.load(Ordering::Acquire) => reset(&app),
@@ -118,7 +127,9 @@ fn run(app: AppHandle, receiver: Receiver<RightAltEvent>) {
                     let _ = app.emit_to(OVERLAY_LABEL, LEVEL_EVENT, voice.input_level());
                 }
                 if matches!(hold.poll(clock.elapsed()), Some(HoldAction::Begin)) {
-                    capturing = begin(&app, &voice);
+                    if capturing {
+                        begin(&app);
+                    }
                 }
             }
             Err(RecvTimeoutError::Disconnected) => break,
@@ -156,21 +167,24 @@ fn cycle_rewrite_mode(app: &AppHandle) {
     }
 }
 
-fn begin(app: &AppHandle, voice: &VoiceService) -> bool {
-    set_state(app, VoiceSessionState::Recording);
-    if let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) {
-        let _ = overlay.set_focusable(false);
-        let _ = position_overlay(app, &overlay);
-        let _ = apply_rounded_window_region(&overlay);
-        let _ = overlay.show();
-    }
-
+fn arm(app: &AppHandle, voice: &VoiceService) -> bool {
+    set_state(app, VoiceSessionState::Arming);
     match tauri::async_runtime::block_on(voice.start_recording()) {
         Ok(()) => true,
         Err(_) => {
             fail(app, "无法启动麦克风，请检查默认输入设备和系统权限。");
             false
         }
+    }
+}
+
+fn begin(app: &AppHandle) {
+    set_state(app, VoiceSessionState::Recording);
+    if let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) {
+        let _ = overlay.set_focusable(false);
+        let _ = position_overlay(app, &overlay);
+        let _ = apply_rounded_window_region(&overlay);
+        let _ = overlay.show();
     }
 }
 
@@ -241,6 +255,9 @@ fn finish_session(
     processing: Arc<AtomicBool>,
     cancellation: Arc<Mutex<Option<CancellationToken>>>,
 ) {
+    // Keep a small release tail so the final phoneme is not clipped when the
+    // user releases Right Alt immediately after speaking.
+    thread::sleep(RELEASE_TAIL);
     let audio = match tauri::async_runtime::block_on(voice.stop_recording()) {
         Ok(audio) if audio.samples.len() >= audio.sample_rate as usize / 10 => audio,
         Ok(_) | Err(_) => {
@@ -248,6 +265,7 @@ fn finish_session(
             return;
         }
     };
+    save_evaluation_audio_if_enabled(&audio);
 
     emit_metric(
         app,
@@ -294,8 +312,12 @@ fn finish_session(
                 let original_transcript = transcript.0.clone();
                 set_state(&worker_app, VoiceSessionState::Rewriting);
                 let corrected = apply_dictionary(&transcript, &dictionary);
+                let protected_terms = dictionary_terms_in_transcript(&corrected, &dictionary);
                 let rewriting_started = Instant::now();
-                let rewritten = match models.rewrite(corrected.clone(), settings.rewrite_mode).await {
+                let rewritten = match models
+                    .rewrite(corrected.clone(), settings.rewrite_mode, protected_terms)
+                    .await
+                {
                     Ok(rewritten) => rewritten,
                     Err(error) => {
                         eprintln!("[voice-runtime] text rewrite failed, using corrected transcript: {error}");
@@ -343,6 +365,33 @@ fn finish_session(
             *active = None;
         }
         fail(app, "无法启动语音处理线程，请重试。");
+    }
+}
+
+fn save_evaluation_audio_if_enabled(audio: &crate::core::models::RecordedAudio) {
+    let Ok(directory) = std::env::var("LISTEN_TO_ME_CAPTURE_EVAL_AUDIO_DIR") else {
+        return;
+    };
+    let directory = directory.trim();
+    if directory.is_empty() {
+        return;
+    }
+    let result = (|| -> Result<(), String> {
+        let directory = Path::new(directory);
+        fs::create_dir_all(directory)
+            .map_err(|error| format!("failed to create evaluation audio directory: {error}"))?;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "system clock is before the Unix epoch".to_owned())?
+            .as_millis();
+        let path = directory.join(format!("capture-{timestamp}.wav"));
+        fs::write(&path, encode_mono_pcm16(audio)?)
+            .map_err(|error| format!("failed to save {}: {error}", path.display()))?;
+        eprintln!("[voice-runtime] saved evaluation audio: {}", path.display());
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("[voice-runtime] evaluation audio was not saved: {error}");
     }
 }
 

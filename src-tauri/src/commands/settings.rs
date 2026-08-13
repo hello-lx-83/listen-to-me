@@ -6,14 +6,12 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::{
     adapters::{
-        ai::{cloud_asr::test_qwen_asr_connection, test_qwen_rewrite_connection},
+        ai::test_qwen_rewrite_connection,
         secrets::credential_store::{wipe_string, CredentialStore},
     },
     app_state::AppState,
-    core::models::{
-        is_supported_qwen_asr_model, is_supported_qwen_rewrite_model, AppSettings,
-        QwenModelSettings,
-    },
+    core::models::{is_supported_qwen_rewrite_model, AppSettings, QwenModelSettings},
+    services::voice::VoiceService,
 };
 
 #[derive(Serialize)]
@@ -74,12 +72,9 @@ pub fn update_qwen_model_settings(
 }
 
 #[tauri::command]
-pub async fn test_qwen_asr_model(model: String) -> Result<(), String> {
-    if !is_supported_qwen_asr_model(&model) {
-        return Err("unsupported Qwen ASR model".to_owned());
-    }
+pub async fn test_qwen_asr_model() -> Result<String, String> {
     let mut api_key = CredentialStore::qwen_api_key()?;
-    let result = test_qwen_asr_connection(api_key.clone(), model).await;
+    let result = VoiceService::test_cloud_asr(api_key.clone()).await;
     wipe_string(&mut api_key);
     result
 }

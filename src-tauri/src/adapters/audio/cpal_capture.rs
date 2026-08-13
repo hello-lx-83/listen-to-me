@@ -257,7 +257,7 @@ fn append_mono_samples<T>(
     level.store((previous * 3 + measured) / 4, Ordering::Relaxed);
 }
 
-fn resample_mono_pcm16(samples: &[i16], source_rate: u32, target_rate: u32) -> Vec<i16> {
+pub(crate) fn resample_mono_pcm16(samples: &[i16], source_rate: u32, target_rate: u32) -> Vec<i16> {
     if samples.is_empty() || source_rate == 0 || target_rate == 0 {
         return samples.to_vec();
     }

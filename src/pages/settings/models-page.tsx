@@ -17,17 +17,12 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from "@/components/ui/spinner";
 import { SettingsPage } from "@/pages/settings/settings-page";
 import { tauriClient } from "@/services/tauri-client";
-import type { QwenAsrModel, QwenModelSettings, QwenRewriteModel } from "@/shared/contracts";
+import type { QwenModelSettings, QwenRewriteModel } from "@/shared/contracts";
 
 const DEFAULT_MODELS: QwenModelSettings = {
-  asrModel: "qwen3-asr-flash",
+  asrModel: "qwen-audio-3.0-asr-flash",
   rewriteModel: "qwen3.7-flash",
 };
-
-const ASR_MODELS: Array<{ value: QwenAsrModel; label: string }> = [
-  { value: "qwen3-asr-flash", label: "Qwen3 ASR Flash · 推荐" },
-  { value: "fun-asr-flash-2026-06-15", label: "Fun-ASR Flash" },
-];
 
 const REWRITE_MODELS: Array<{
   value: QwenRewriteModel;
@@ -79,6 +74,12 @@ function testErrorMessage(error: unknown, capability: Capability) {
   }
   if (detail.includes("network request failed")) {
     return "无法连接千问服务。";
+  }
+  if (detail.includes("HTTP status 400")) return "模型测试请求格式无效。";
+  if (detail.includes("empty response") || detail.includes("could not be decoded")) {
+    return capability === "asr"
+      ? "没有识别到语音，请点击测试后立即说“测试语音识别”。"
+      : "服务已连接，但返回内容无法用于完成测试。";
   }
   return capability === "asr" ? "语音识别测试失败。" : "文本整理测试失败。";
 }
@@ -170,32 +171,14 @@ export function ModelsSettingsPage() {
     }
   }
 
-  async function handleAsrModelChange(value: QwenAsrModel | null) {
-    if (!value || value === models.asrModel) return;
-
-    setModelSaving(true);
-    setPageError("");
-    setTestResults((current) => ({ ...current, asr: undefined }));
-    try {
-      const saved = await tauriClient.updateQwenModelSettings({
-        ...models,
-        asrModel: value,
-      });
-      setModels(saved);
-    } catch {
-      setPageError("语音识别模型保存失败。");
-    } finally {
-      setModelSaving(false);
-    }
-  }
-
   async function handleTest(capability: Capability) {
     setTesting((current) => ({ ...current, [capability]: true }));
     setPageError("");
     setTestResults((current) => ({ ...current, [capability]: undefined }));
     try {
+      let asrTranscript = "";
       if (capability === "asr") {
-        await tauriClient.testQwenAsrModel(models.asrModel);
+        asrTranscript = await tauriClient.testQwenAsrModel();
       } else {
         await tauriClient.testQwenRewriteModel(models.rewriteModel);
       }
@@ -203,7 +186,9 @@ export function ModelsSettingsPage() {
         ...current,
         [capability]: {
           status: "success",
-          message: capability === "asr" ? "语音识别可用。" : "文本整理可用。",
+          message: capability === "asr"
+            ? `语音识别可用，识别结果：${asrTranscript}`
+            : "文本整理可用。",
         },
       }));
     } catch (error) {
@@ -281,25 +266,12 @@ export function ModelsSettingsPage() {
       >
         <SettingRow
           title="识别模型"
-          control={
-            <Select
-              value={models.asrModel}
-              onValueChange={(value) => void handleAsrModelChange(value as QwenAsrModel | null)}
-              disabled={controlsDisabled}
-            >
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {ASR_MODELS.map((model) => (
-                    <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          }
+          description="固定使用支持即时热词和上下文增强的最新语音模型。"
+          control={<Badge variant="secondary">Qwen Audio 3.0 ASR Flash</Badge>}
         />
         <SettingRow
           title="模型测试"
+          description="点击后会录音 4 秒，请立即说“测试语音识别”。"
           control={
             <Button
               size="sm"
@@ -308,7 +280,7 @@ export function ModelsSettingsPage() {
               onClick={() => void handleTest("asr")}
             >
               {testing.asr ? <Spinner data-icon="inline-start" /> : <MicIcon data-icon="inline-start" />}
-              {testing.asr ? "测试中…" : "测试语音识别"}
+              {testing.asr ? "正在录音，请说话…" : "测试语音识别"}
             </Button>
           }
         />

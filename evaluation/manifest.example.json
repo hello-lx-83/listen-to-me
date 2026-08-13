@@ -1,0 +1,103 @@
+{
+  "language": "zh",
+  "cases": [
+    {
+      "id": "short-clear-01",
+      "category": "short",
+      "audio": "audio/short-clear-01.wav",
+      "reference": "明天下午三点开会",
+      "max_asr_cer": 0.15,
+      "final_must_contain": ["明天", "3", "开会"],
+      "final_must_not_contain": []
+    },
+    {
+      "id": "short-tail-01",
+      "category": "short-tail",
+      "audio": "audio/short-tail-01.wav",
+      "reference": "部署完成",
+      "max_asr_cer": 0.0,
+      "final_must_contain": ["部署完成"],
+      "final_must_not_contain": []
+    },
+    {
+      "id": "incomplete-01",
+      "category": "incomplete",
+      "audio": "audio/incomplete-01.wav",
+      "reference": "这个方案主要是因为",
+      "max_asr_cer": 0.20,
+      "final_must_contain": ["这个方案", "因为"],
+      "final_must_not_contain": ["所以", "成本"]
+    },
+    {
+      "id": "ambiguous-01",
+      "category": "ambiguous",
+      "audio": "audio/ambiguous-01.wav",
+      "reference": "把那个放到那里就可以了",
+      "max_asr_cer": 0.15,
+      "final_must_contain": ["那个", "那里"],
+      "final_must_not_contain": ["文件夹", "桌面"]
+    },
+    {
+      "id": "terminology-01",
+      "category": "terminology",
+      "audio": "audio/terminology-01.wav",
+      "reference": "用 Codex 检查 Qwen-ASR 接口",
+      "max_asr_cer": 0.10,
+      "dictionary": [
+        { "source": "扣得克斯、code x", "replacement": "Codex" },
+        { "source": "千问 ASR、Qwen ASR、Queen SR ASR", "replacement": "Qwen-ASR" }
+      ],
+      "final_must_contain": ["Codex", "Qwen-ASR", "接口"],
+      "final_must_not_contain": ["代码助手", "语音识别模型"]
+    },
+    {
+      "id": "mixed-language-01",
+      "category": "mixed-language",
+      "audio": "audio/mixed-language-01.wav",
+      "reference": "把这个 pull request 标记成 ready for review",
+      "max_asr_cer": 0.15,
+      "dictionary": [
+        { "source": "pull request", "replacement": "pull request" },
+        { "source": "ready for review", "replacement": "ready for review" }
+      ],
+      "final_must_contain": ["pull request", "ready for review"],
+      "final_must_not_contain": ["拉取请求", "准备审查"]
+    },
+    {
+      "id": "facts-01",
+      "category": "facts",
+      "audio": "audio/facts-01.wav",
+      "reference": "明天下午 3:30 发布 2.1 版本完成度 90%",
+      "max_asr_cer": 0.20,
+      "final_must_contain": ["发布", "完成度", "90"],
+      "final_must_not_contain": ["100%"]
+    },
+    {
+      "id": "self-correction-01",
+      "category": "self-correction",
+      "audio": "audio/self-correction-01.wav",
+      "reference": "周三发布不对改成周四发布",
+      "max_asr_cer": 0.15,
+      "final_must_contain": ["周四", "发布"],
+      "final_must_not_contain": ["周三发布"]
+    },
+    {
+      "id": "long-list-01",
+      "category": "long",
+      "audio": "audio/long-list-01.wav",
+      "reference": "今天要做三件事第一检查登录流程第二修复语音输入第三补上回归测试",
+      "max_asr_cer": 0.15,
+      "final_must_contain": ["登录流程", "语音输入", "回归测试"],
+      "final_must_not_contain": ["第四"]
+    },
+    {
+      "id": "noise-01",
+      "category": "noise",
+      "audio": "audio/noise-01.wav",
+      "reference": "请把测试结果发给我",
+      "max_asr_cer": 0.25,
+      "final_must_contain": ["测试结果", "发给我"],
+      "final_must_not_contain": ["已经发送"]
+    }
+  ]
+}

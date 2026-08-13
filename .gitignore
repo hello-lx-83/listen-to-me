@@ -19,6 +19,11 @@ dist-ssr
 src-tauri/target/
 src-tauri/target-validation/
 
+# Local voice evaluation data may contain private speech and model output.
+evaluation/audio/
+evaluation/results/
+evaluation/manifest.local.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

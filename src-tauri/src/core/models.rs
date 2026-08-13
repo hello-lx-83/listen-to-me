@@ -62,12 +62,8 @@ pub struct AppSettings {
     pub history_retention_days: u32,
 }
 
-pub const DEFAULT_QWEN_ASR_MODEL: &str = "qwen3-asr-flash";
+pub const DEFAULT_QWEN_ASR_MODEL: &str = "qwen-audio-3.0-asr-flash";
 pub const DEFAULT_QWEN_REWRITE_MODEL: &str = "qwen3.7-flash";
-
-pub fn is_supported_qwen_asr_model(model: &str) -> bool {
-    matches!(model, "qwen3-asr-flash" | "fun-asr-flash-2026-06-15")
-}
 
 pub fn is_supported_qwen_rewrite_model(model: &str) -> bool {
     matches!(

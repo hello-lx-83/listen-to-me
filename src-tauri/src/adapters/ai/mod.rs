@@ -4,6 +4,9 @@ pub mod local_asr;
 pub mod local_rewriter;
 mod qwen_client;
 
+#[cfg(test)]
+mod evaluation;
+
 pub async fn test_qwen_rewrite_connection(api_key: String, model: String) -> Result<(), String> {
     use serde_json::json;
 

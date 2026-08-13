@@ -26,8 +26,7 @@ export const tauriClient = {
     invoke<QwenModelSettings>("get_qwen_model_settings"),
   updateQwenModelSettings: (settings: QwenModelSettings) =>
     invoke<QwenModelSettings>("update_qwen_model_settings", { settings }),
-  testQwenAsrModel: (model: QwenModelSettings["asrModel"]) =>
-    invoke<void>("test_qwen_asr_model", { model }),
+  testQwenAsrModel: () => invoke<string>("test_qwen_asr_model"),
   testQwenRewriteModel: (model: QwenModelSettings["rewriteModel"]) =>
     invoke<void>("test_qwen_rewrite_model", { model }),
   getAutostartEnabled: () => invoke<boolean>("get_autostart_enabled"),

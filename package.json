@@ -1,7 +1,7 @@
 {
   "name": "listen-to-me",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A Windows voice input app that transcribes, refines, and inserts speech into the active text field.",
   "repository": "https://github.com/hello-lx-83/listen-to-me",
   "type": "module",
